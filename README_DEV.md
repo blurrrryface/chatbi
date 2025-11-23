@@ -10,3 +10,8 @@ bun install @radix-ui/react-dialog @radix-ui/react-slot @radix-ui/react-scroll-a
 bunx --bun shadcn@latest init
 bunx --bun shadcn@latest add resizable scroll-area separator button card sheet avatar
 ```
+
+## todo_list
+- [ ] 加上localStroge 或 Zustand
+- [ ] 后端加上数据库
+- [ ] 完善后端功能
