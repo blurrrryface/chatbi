@@ -48,3 +48,4 @@ bun.lockb
 
 # LangGraph API
 .langgraph_api
+agent/db/*

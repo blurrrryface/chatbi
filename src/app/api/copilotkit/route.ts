@@ -2,25 +2,35 @@ import {
   CopilotRuntime,
   ExperimentalEmptyAdapter,
   copilotRuntimeNextJSAppRouterEndpoint,
+  LangGraphHttpAgent,
 } from "@copilotkit/runtime";
 
 import { LangGraphAgent } from "@ag-ui/langgraph"
 import { NextRequest } from "next/server";
- 
+ import { HttpAgent } from "@ag-ui/client";
 // 1. You can use any service adapter here for multi-agent support. We use
 //    the empty adapter since we're only using one agent.
 const serviceAdapter = new ExperimentalEmptyAdapter();
  
 // 2. Create the CopilotRuntime instance and utilize the LangGraph AG-UI
 //    integration to setup the connection.
+// const runtime = new CopilotRuntime({
+//   agents: {
+//     "sample_agent": new LangGraphAgent({
+//       deploymentUrl: process.env.LANGGRAPH_DEPLOYMENT_URL || "http://localhost:8123/agents/simple_agent",
+//       graphId: "sample_agent",
+//       langsmithApiKey: process.env.LANGSMITH_API_KEY || "",
+//     }),
+//   }
+// });
+
+const sample_agent = new LangGraphHttpAgent({
+  url: "http://localhost:8123/agents/simple_agent",
+});
 const runtime = new CopilotRuntime({
   agents: {
-    "sample_agent": new LangGraphAgent({
-      deploymentUrl: process.env.LANGGRAPH_DEPLOYMENT_URL || "http://localhost:8123",
-      graphId: "sample_agent",
-      langsmithApiKey: process.env.LANGSMITH_API_KEY || "",
-    }),
-  }
+    sample_agent, // Register the agent with the runtime
+  },
 });
  
 // 3. Build a Next.js API route that handles the CopilotKit runtime requests.
