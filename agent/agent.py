@@ -1,8 +1,3 @@
-"""
-This is the main entry point for the agent.
-It defines the workflow graph, state, tools, nodes and edges.
-"""
-
 from typing import Any, List
 from typing_extensions import Literal
 from langchain_openai import ChatOpenAI
@@ -27,17 +22,14 @@ from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 
 from dotenv import load_dotenv
 import os
+import json
+import urllib.request
+import urllib.error
 # Load environment variables from .env file
 load_dotenv()
 
 class AgentState(MessagesState):
-    """
-    Here we define the state of the agent
 
-    In this instance, we're inheriting from CopilotKitState, which will bring in
-    the CopilotKitState fields. We're also adding a custom field, `language`,
-    which will be used to set the language of the agent.
-    """
     proverbs: List[str] = []
     tools: List[Any]
     # your_custom_agent_state: str = ""
@@ -49,15 +41,43 @@ def get_weather(location: str):
     """
     return f"The weather for {location} is 70 degrees."
 
-# @tool
-# def your_tool_here(your_arg: str):
-#     """Your tool description here."""
-#     print(f"Your tool logic here")
-#     return "Your tool response here."
+@tool
+def kb_chat(question: str, file_name: str = "") -> str:
+    """
+    检索知识库获得相关的知识.
+    """
+    url = os.getenv("KB_API_URL", "http://127.0.0.1:18888/api/v1/chat")
+    payload = json.dumps({"question": question, "file_name": file_name}).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"accept": "application/json", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            return res.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode("utf-8")
+        except Exception:
+            body = ""
+        return json.dumps({"error": {"code": e.code, "reason": e.reason}, "body": body}, ensure_ascii=False)
+    except urllib.error.URLError as e:
+        return json.dumps({"error": {"reason": str(e)}}, ensure_ascii=False)
+
+
+@tool
+def db_query(sql: str) -> str:
+    """
+    执行数据库查询.
+    """
+    return f"执行SQL查询: {sql}"
+
 
 backend_tools = [
-    get_weather
-    # your_tool_here
+    get_weather,
+    kb_chat
 ]
 
 # Extract tool names from backend_tools for comparison
@@ -65,16 +85,6 @@ backend_tool_names = [tool.name for tool in backend_tools]
 
 
 async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Literal["tool_node", "__end__"]]:
-    """
-    Standard chat node based on the ReAct design pattern. It handles:
-    - The model to use (and binds in CopilotKit actions and the tools defined above)
-    - The system prompt
-    - Getting a response from the model
-    - Handling tool calls
-
-    For more about the ReAct design pattern, see:
-    https://www.perplexity.ai/search/react-agents-NcXLQhreS0WDzpVaS4m9Cg
-    """
 
     # 1. Define the model
     model = ChatOpenAI(
@@ -91,15 +101,15 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
             # your_tool_here
         ],
 
-        # 2.1 Disable parallel tool calls to avoid race conditions,
-        #     enable this for faster performance if you want to manage
-        #     the complexity of running tool calls in parallel.
         parallel_tool_calls=False,
     )
 
     # 3. Define the system message by which the chat model will be run
     system_message = SystemMessage(
-        content=f"You are a helpful assistant. The current proverbs are {state.get('proverbs', [])}."
+        content=f"""You are a helpful assistant. The current proverbs are {state.get('proverbs', [])}.
+        You can use the following tools to answer the user's question: {', '.join(backend_tool_names)}.
+        当你设计数据查询相关的任务，你需要根据用户的问题，调用kb_chat工具来获取相关知识，才能做进一步的判断和回答。
+        """
     )
 
     # 4. Run the model to generate a response
@@ -172,18 +182,11 @@ async def lifespan(app: FastAPI):
             agent=agent,
             path="/agents/simple_agent"
         )
-        
-        print("Agent and Database initialized successfully.")
         yield
         # 应用关闭时，连接会自动通过 async with 关闭
 # --- 修改 3: 将 lifespan 传递给 FastAPI ---
 app = FastAPI(lifespan=lifespan)
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
-    os.environ["LANGGRAPH_FAST_API"] = "true"
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8123)
