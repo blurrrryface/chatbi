@@ -1,79 +1,26 @@
 from typing import Any, List
 from typing_extensions import Literal
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, BaseMessage
+
+from langchain_core.messages import SystemMessage, BaseMessage, ToolMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
-from langchain.tools import tool
-from langgraph.graph import StateGraph, END
+from langchain_core.pydantic_v1 import BaseModel, Field
+
+from langgraph.graph import StateGraph, END, START
 from langgraph.types import Command
-from langgraph.graph import MessagesState
 from langgraph.prebuilt import ToolNode
 
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
-# from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langgraph.checkpoint.memory import MemorySaver
-import sqlite3
-import asyncio
-import aiosqlite
-from copilotkit import LangGraphAGUIAgent
-from ag_ui_langgraph import add_langgraph_fastapi_endpoint
+from copilotkit import CopilotKitState
+from copilotkit.langgraph import copilotkit_emit_state
 
-from dotenv import load_dotenv
-import os
-import json
-import urllib.request
-import urllib.error
-# Load environment variables from .env file
-load_dotenv()
+from models import llm
+from tools import get_weather, kb_chat
+from utils import handle_tool_completion, handle_tool_call_emission
 
-class AgentState(MessagesState):
-
-    proverbs: List[str] = []
+class AgentState(CopilotKitState):
     tools: List[Any]
-    # your_custom_agent_state: str = ""
-
-@tool
-def get_weather(location: str):
-    """
-    Get the weather for a given location.
-    """
-    return f"The weather for {location} is 70 degrees."
-
-@tool
-def kb_chat(question: str, file_name: str = "") -> str:
-    """
-    检索知识库获得相关的知识.
-    """
-    url = os.getenv("KB_API_URL", "http://127.0.0.1:18888/api/v1/chat")
-    payload = json.dumps({"question": question, "file_name": file_name}).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={"accept": "application/json", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as res:
-            return res.read().decode("utf-8")
-    except urllib.error.HTTPError as e:
-        try:
-            body = e.read().decode("utf-8")
-        except Exception:
-            body = ""
-        return json.dumps({"error": {"code": e.code, "reason": e.reason}, "body": body}, ensure_ascii=False)
-    except urllib.error.URLError as e:
-        return json.dumps({"error": {"reason": str(e)}}, ensure_ascii=False)
-
-
-@tool
-def db_query(sql: str) -> str:
-    """
-    执行数据库查询.
-    """
-    return f"执行SQL查询: {sql}"
-
+    tool_status: str
+    active_tool: dict # { "name": str, "args": dict, "status": str, "result": str }
+    intent: str
 
 backend_tools = [
     get_weather,
@@ -83,34 +30,70 @@ backend_tools = [
 # Extract tool names from backend_tools for comparison
 backend_tool_names = [tool.name for tool in backend_tools]
 
+class IntentSchema(BaseModel):
+    intent: Literal["general_agent", "data_query", "direct_answer"] = Field(
+        description="The user's intent. 'general_agent' for general tasks, 'data_query' for data analysis/querying, 'direct_answer' for simple Q&A without tools."
+    )
+
+async def intent_node(state: AgentState, config: RunnableConfig):
+    system_msg = SystemMessage(content="""
+    You are an intent classifier. Analyze the user's latest request and categorize it into one of the following:
+    - general_agent: For general questions that might need tools like weather or general knowledge.
+    - data_query: For questions specifically about data, numbers, statistics, or querying the knowledge base for data.
+    - direct_answer: For greetings, small talk, or questions that can be answered directly from context without external tools.
+    """)
+    
+    messages = [system_msg] + state["messages"]
+    
+    classifier = llm.with_structured_output(IntentSchema)
+    result = await classifier.ainvoke(messages, config)
+    
+    return {"intent": result.intent}
 
 async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Literal["tool_node", "__end__"]]:
 
+    # Handle tool completion state
+    await handle_tool_completion(state, config)
+
+    intent = state.get("intent", "general_agent")
+    
+    # Determine tools and system message based on intent
+    current_tools = []
+    system_content = ""
+
+    if intent == "direct_answer":
+        current_tools = []
+        system_content = "You are a helpful assistant. Answer the user's question directly based on the context."
+    elif intent == "data_query":
+        # For data queries, we focus on kb_chat as per instructions
+        current_tools = [kb_chat]
+        system_content = f"""You are a data analysis assistant. 
+        You can use the following tools to answer the user's question: kb_chat.
+        当你用户的问题可能是和数据查询相关，根据用户的问题，调用kb_chat工具来获取相关知识进一步的判断和回答。
+        你不能在不调用工具的前提下就拒绝回答用户的问题。
+        """
+    else: # general_agent
+        current_tools = backend_tools
+        system_content = f"""You are a helpful assistant.
+        You can use the following tools to answer the user's question: {', '.join([t.name for t in current_tools])}.
+        """
+
     # 1. Define the model
-    model = ChatOpenAI(
-        model="qwen3-235b-a22b-instruct-2507",
-        base_url="https://www.DMXAPI.cn/v1",
-        api_key=os.getenv("OPENAI_API_KEY"),
-    )
+    model = llm
 
     # 2. Bind the tools to the model
-    model_with_tools = model.bind_tools(
-        [
-            *state.get("tools", []), # bind tools defined by ag-ui
-            *backend_tools,
-            # your_tool_here
-        ],
+    model_with_tools = model
+    if current_tools or state.get("tools"):
+        model_with_tools = model.bind_tools(
+            [
+                *state.get("tools", []), # bind tools defined by ag-ui
+                *current_tools,
+            ],
+            parallel_tool_calls=False,
+        )
 
-        parallel_tool_calls=False,
-    )
-
-    # 3. Define the system message by which the chat model will be run
-    system_message = SystemMessage(
-        content=f"""You are a helpful assistant. The current proverbs are {state.get('proverbs', [])}.
-        You can use the following tools to answer the user's question: {', '.join(backend_tool_names)}.
-        当你设计数据查询相关的任务，你需要根据用户的问题，调用kb_chat工具来获取相关知识，才能做进一步的判断和回答。
-        """
-    )
+    # 3. Define the system message
+    system_message = SystemMessage(content=system_content)
 
     # 4. Run the model to generate a response
     response = await model_with_tools.ainvoke([
@@ -119,8 +102,18 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     ], config)
 
     # only route to tool node if tool is not in the tools list
-    if route_to_tool_node(response):
+    # We use backend_tool_names for global check, or should we check against current_tools?
+    # The route_to_tool_node function logic should match the tools bound.
+    # However, ToolNode has ALL backend_tools.
+    
+    allowed_tool_names = [t.name for t in current_tools]
+    
+    if route_to_tool_node(response, allowed_tool_names):
         print("routing to tool node")
+        
+        # Emit running state
+        await handle_tool_call_emission(response, config, backend_tool_names)
+        
         return Command(
             goto="tool_node",
             update={
@@ -136,57 +129,26 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
         }
     )
 
-def route_to_tool_node(response: BaseMessage):
+def route_to_tool_node(response: BaseMessage, allowed_tool_names: List[str]):
     """
-    Route to tool node if any tool call in the response matches a backend tool name.
+    Route to tool node if any tool call in the response matches an allowed backend tool name.
     """
     tool_calls = getattr(response, "tool_calls", None)
     if not tool_calls:
         return False
 
     for tool_call in tool_calls:
-        if tool_call.get("name") in backend_tool_names:
+        if tool_call.get("name") in allowed_tool_names:
             return True
     return False
 
 # Define the workflow graph
 workflow = StateGraph(AgentState)
+workflow.add_node("intent_node", intent_node)
 workflow.add_node("chat_node", chat_node)
 workflow.add_node("tool_node", ToolNode(tools=backend_tools))
+
+workflow.add_edge(START, "intent_node")
+workflow.add_edge("intent_node", "chat_node")
 workflow.add_edge("tool_node", "chat_node")
-workflow.set_entry_point("chat_node")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 1. 建立异步数据库连接
-    async with aiosqlite.connect("./db/checkpoints.db") as conn:
-        # 2. 初始化异步 Checkpointer
-        checkpointer = AsyncSqliteSaver(conn)
-        
-        # 3. 确保数据库表已创建 (AsyncSqliteSaver 需要这一步)
-        await checkpointer.setup()
-        
-        # 4. 编译 Graph
-        graph = workflow.compile(checkpointer=checkpointer)
-        
-        # 5. 初始化 Agent 并注册路由
-        # 注意：我们在应用启动时动态添加路由
-        agent = LangGraphAGUIAgent(
-            name="simple_agent",
-            description="Simple agent.",
-            graph=graph, 
-        )
-        
-        add_langgraph_fastapi_endpoint(
-            app=app,
-            agent=agent,
-            path="/agents/simple_agent"
-        )
-        yield
-        # 应用关闭时，连接会自动通过 async with 关闭
-# --- 修改 3: 将 lifespan 传递给 FastAPI ---
-app = FastAPI(lifespan=lifespan)
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8123)

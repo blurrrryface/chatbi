@@ -17,7 +17,9 @@ dependencies = [
     "aiosqlite",
     "langgraph-checkpoint-sqlite",
     "copilotkit",
-    "deepagents"
+    "deepagents",
+    "mlflow>=3.6.0",
+    "pydantic-settings>=2.12.0",
 ]
 
 

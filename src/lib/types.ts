@@ -49,4 +49,12 @@ export interface AgentState {
   widgets: DashboardWidget[];
   // 可以在这里加更多状态，比如 current_dataset, user_preferences 等
   active_dataset?: string; 
+  tool_status?: string;
+  active_tool?: {
+    id?: string;
+    name: string;
+    args: any;
+    status: "running" | "done";
+    result?: any;
+  };
 }

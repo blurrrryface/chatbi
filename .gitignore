@@ -51,3 +51,6 @@ bun.lockb
 agent/db/*
 
 rag/*
+
+agent/.env
+agent/mlruns

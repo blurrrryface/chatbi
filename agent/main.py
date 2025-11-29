@@ -8,6 +8,7 @@ from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import aiosqlite
 from agent import workflow
+from settings import settings
 import uvicorn
 import warnings
 
@@ -17,7 +18,7 @@ warnings.filterwarnings("ignore", module=r"pydantic\._internal\._generate_schema
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 1. 建立异步数据库连接
-    async with aiosqlite.connect("./db/checkpoints.db") as conn:
+    async with aiosqlite.connect(settings.CHECKPOINTS_DB_PATH) as conn:
         # 2. 初始化异步 Checkpointer
         checkpointer = AsyncSqliteSaver(conn)
         
@@ -47,4 +48,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8123)
+    import mlflow
+    # Calling autolog for LangChain will enable trace logging.
+    mlflow.langchain.autolog()
+
+    # Optional: Set a tracking URI and an experiment
+    mlflow.set_experiment("LangGraph")
+
+    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+
+    uvicorn.run(app, host=settings.SERVER_HOST, port=settings.SERVER_PORT)
