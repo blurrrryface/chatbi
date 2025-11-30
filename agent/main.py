@@ -7,7 +7,7 @@ from copilotkit import LangGraphAGUIAgent
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import aiosqlite
-from agent import workflow
+from graph.agent import workflow
 from settings import settings
 import uvicorn
 import warnings

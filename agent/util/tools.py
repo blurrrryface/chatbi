@@ -14,13 +14,54 @@ def get_weather(location: str):
     result = f"The weather for {location} is 70 degrees."
     return result
 
+
+# 指标含义查询工具
 @tool
-def kb_chat(question: str, file_name: str = "") -> str:
+def search_indicate(question: str):
+    """
+    指标含义查询工具
+    参数:
+        question: 指标名称
+    """
+    result = kb_chat(question=f"指标含义查询: {question}",file_name="知识库建模 - 指标定义表.csv",top_n=5)
+    return result
+
+
+@tool
+def get_current_time() -> str:
+    """
+    获取当前时间
+    """
+    import time
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+@tool
+def get_priviledge() -> str:
+    """
+    获取当前用户权限
+    """
+    return "dept_name='共享技术部'"
+
+@tool
+def search_metadata(question: str):
+    """
+    元数据查询工具
+    参数:
+        question: 问题描述
+    """
+    result = kb_chat(question=f"元数据查询: {question}",file_name="知识库建模 - 表结构元信息表.csv",top_n=1)
+    return result
+
+def kb_chat(question: str, file_name: str = "",top_n: int = 5) -> str:
     """
     检索知识库获得相关的知识.
+    参数:
+        question: 问题描述
+        file_name: 可选参数，指定知识库文件名称
+        top_n: 可选参数，指定返回的前 N 个结果
     """
     url = settings.KB_API_URL
-    payload = json.dumps({"question": question, "file_name": file_name}).encode("utf-8")
+    payload = json.dumps({"question": question, "file_name": file_name, "top_n": top_n}).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=payload,

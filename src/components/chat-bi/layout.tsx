@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import { CopilotChat } from "@copilotkit/react-ui";
-import { useCoAgentStateRender, useRenderToolCall } from "@copilotkit/react-core";
+import { useCoAgentStateRender, useRenderToolCall, useCopilotAction, useHumanInTheLoop } from "@copilotkit/react-core";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 import { PanelLeftClose, PanelLeftOpen, LayoutDashboard, Loader2, X, ChevronDown, ChevronRight } from "lucide-react";
@@ -10,6 +10,7 @@ import { useChatSessions } from "@/lib/hooks/use-chat-sessions";
 import { Sidebar } from "./sidebar";
 import { Canvas } from "./canvas";
 import { ToolStatusDisplay } from "./tool-status-display";
+import { QueryApproval } from "./query-approval";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { cn } from "@/lib/util";
 
@@ -40,7 +41,7 @@ function KnowledgeBaseResult({ answer, sources }: { answer: any, sources: any[] 
         >
           <div className="flex items-center gap-2">
             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            Knowledge Base Result
+            知识库结果
           </div>
         </div>
         
@@ -49,7 +50,7 @@ function KnowledgeBaseResult({ answer, sources }: { answer: any, sources: any[] 
             <p className="text-sm whitespace-pre-wrap">{answerChunks[0]}</p>
             {sources.length > 0 && (
               <div className="mt-2 pt-2 border-t">
-                <p className="text-xs font-semibold mb-1">Sources:</p>
+                <p className="text-xs font-semibold mb-1">来源:</p>
                 <ul className="list-disc list-inside text-xs text-muted-foreground">
                   {sources.map((source: any, idx: number) => (
                     <li key={idx}>
@@ -73,7 +74,7 @@ function KnowledgeBaseResult({ answer, sources }: { answer: any, sources: any[] 
       >
         <div className="flex items-center gap-2">
           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          Knowledge Base Result <span className="text-xs font-normal text-muted-foreground">({answerChunks.length} items)</span>
+          知识库结果 <span className="text-xs font-normal text-muted-foreground">({answerChunks.length} 项)</span>
         </div>
       </div>
       
@@ -96,7 +97,7 @@ function KnowledgeBaseResult({ answer, sources }: { answer: any, sources: any[] 
 
           {sources.length > 0 && (
               <div className="mt-2 pt-2 border-t">
-                <p className="text-xs font-semibold mb-1">Sources:</p>
+                <p className="text-xs font-semibold mb-1">来源:</p>
                 <ul className="list-disc list-inside text-xs text-muted-foreground">
                   {sources.map((source: any, idx: number) => (
                     <li key={idx}>
@@ -116,7 +117,7 @@ function KnowledgeBaseResult({ answer, sources }: { answer: any, sources: any[] 
             onClick={e => e.stopPropagation()}
           >
              <div className="p-4 border-b flex items-center justify-between">
-                <h3 className="font-semibold">Result Detail {selectedIndex + 1}</h3>
+                <h3 className="font-semibold">结果详情 {selectedIndex + 1}</h3>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedIndex(null)}>
                   <X className="h-4 w-4" />
                 </Button>
@@ -146,6 +147,49 @@ export function ChatBILayout({
   const sidebarRef = useRef<ImperativePanelHandle>(null);
   const chatRef = useRef<ImperativePanelHandle>(null);
   
+  useHumanInTheLoop({
+    name: "approve_query_parameters",
+    description: "Request user approval for the query parameters before generating SQL.",
+    parameters: [
+      {
+        name: "indicators",
+        type: "array",
+        items: { type: "string" },
+        description: "List of indicators identified from the user query.",
+      },
+      {
+        name: "candidate_indicators",
+        type: "array",
+        items: { type: "string" },
+        description: "List of all available candidate indicators found from the search tool.",
+      },
+      {
+        name: "start_time",
+        type: "string",
+        description: "The start time of the query range (YYYY-MM-DD).",
+      },
+      {
+        name: "end_time",
+        type: "string",
+        description: "The end time of the query range (YYYY-MM-DD).",
+      },
+      {
+        name: "time_list",
+        type: "array",
+        items: { type: "string" },
+        description: "List of time ranges (deprecated, use start_time and end_time).",
+      },
+      {
+        name: "row_privilege",
+        type: "string",
+        description: "The row privilege string to be applied.",
+      },
+    ],
+    render: (props) => {
+      return <QueryApproval {...props} />;
+    },
+  });
+
   const performLayoutChange = (action: () => void) => {
     setIsLayoutChanging(true);
     action();

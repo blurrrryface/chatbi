@@ -18,13 +18,13 @@ export function Sidebar({ sessions, currentId, onCreate, onSwitch, onDelete }: S
       <div className="p-3 border-b">
         <Button className="w-full justify-start gap-2" onClick={onCreate}>
           <Plus className="h-4 w-4" />
-          New Chat
+          新建对话
         </Button>
       </div>
       <ScrollArea className="flex-1 p-2">
         <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1">
           <History className="h-3 w-3" />
-          History
+          历史记录
         </p>
         <div className="space-y-1">
           {sessions.map((session) => (

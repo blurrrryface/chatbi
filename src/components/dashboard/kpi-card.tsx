@@ -35,7 +35,7 @@ export function KpiCard({ title, value, trend, trendLabel, icon }: KpiCardProps)
               {Math.abs(trend)}%
             </span>
             <span className="ml-1 text-muted-foreground opacity-70">
-              {trendLabel || "vs last period"}
+              {trendLabel || "与上期相比"}
             </span>
           </p>
         )}

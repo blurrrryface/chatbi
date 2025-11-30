@@ -2,8 +2,9 @@ import { DashboardWidget } from "@/lib/types";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { DynamicChart } from "@/components/dashboard/dynamic-chart";
 import { DataTable } from "@/components/dashboard/data-table";
+import { SqlViewer } from "./sql-viewer";
 
-export function WidgetRenderer({ widget }: { widget: DashboardWidget }) {
+export function WidgetRenderer({ widget, isDevMode = false }: { widget: DashboardWidget, isDevMode?: boolean }) {
   switch (widget.type) {
     case "kpi":
       return (
@@ -35,6 +36,14 @@ export function WidgetRenderer({ widget }: { widget: DashboardWidget }) {
         <div className="col-span-1 md:col-span-2">
           <DataTable title={widget.title} data={widget.data} />
         </div>
+      );
+    case "sql":
+      return (
+        <SqlViewer 
+          title={widget.title} 
+          sql={widget.data.sql || widget.data} 
+          isDevMode={isDevMode} 
+        />
       );
     default:
       return null;

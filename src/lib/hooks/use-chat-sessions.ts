@@ -24,7 +24,7 @@ export function useChatSessions(
       // 3. 如果不存在，添加新会话
       const newSession: ChatSession = {
         id: currentThreadId,
-        title: `Analysis ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        title: `分析 ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
         createdAt: new Date(),
       };
       

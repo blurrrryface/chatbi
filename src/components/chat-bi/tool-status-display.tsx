@@ -54,7 +54,7 @@ export function ToolStatusDisplay({ state, status }: ToolStatusDisplayProps) {
     return (
       <div className="w-full mb-2 p-2 border rounded-lg bg-muted/20 flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in">
         <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Thinking...</span>
+        <span>思考中...</span>
       </div>
     );
   }
@@ -69,7 +69,7 @@ export function ToolStatusDisplay({ state, status }: ToolStatusDisplayProps) {
       {isThinking && (
          <div className="w-full p-2 border rounded-lg bg-muted/20 flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in">
            <Loader2 className="h-4 w-4 animate-spin" />
-           <span>Thinking...</span>
+           <span>思考中...</span>
          </div>
       )}
     </div>
@@ -94,7 +94,7 @@ function ToolItem({ tool }: { tool: ActiveTool }) {
             <Check className="h-4 w-4 text-green-500" />
           )}
           <span className="text-sm font-medium">
-            {isRunning ? "Executing" : "Executed"}: <span className="font-mono text-xs bg-muted px-1 rounded">{tool.name}</span>
+            {isRunning ? "执行中" : "已执行"}: <span className="font-mono text-xs bg-muted px-1 rounded">{tool.name}</span>
           </span>
         </div>
         <CollapsibleTrigger asChild>
@@ -106,12 +106,12 @@ function ToolItem({ tool }: { tool: ActiveTool }) {
       </div>
       <CollapsibleContent className="space-y-2 px-2">
         <div className="rounded-md border bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground overflow-x-auto max-h-[200px]">
-          <div className="font-semibold mb-1 text-foreground/80">Arguments:</div>
+          <div className="font-semibold mb-1 text-foreground/80">参数:</div>
           <pre>{JSON.stringify(tool.args, null, 2)}</pre>
           
           {tool.result && (
              <>
-              <div className="font-semibold mt-2 mb-1 text-foreground/80">Result:</div>
+              <div className="font-semibold mt-2 mb-1 text-foreground/80">结果:</div>
               <pre>{typeof tool.result === 'string' ? tool.result : JSON.stringify(tool.result, null, 2)}</pre>
              </>
           )}

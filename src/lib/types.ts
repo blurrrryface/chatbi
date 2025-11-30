@@ -35,7 +35,7 @@ export interface SidebarProps {
 }
 
 // 这是一个“契约”，Python端的 LangGraph State 必须和这个保持一致
-export type WidgetType = "kpi" | "chart" | "table";
+export type WidgetType = "kpi" | "chart" | "table" | "sql";
 export interface DashboardWidget {
   id: string;
   type: WidgetType;
@@ -57,4 +57,7 @@ export interface AgentState {
     status: "running" | "done";
     result?: any;
   };
+  time_list?: string[];
+  indicator_list?: string[];
+  priviledge?: string;
 }
